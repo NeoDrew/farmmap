@@ -79,25 +79,31 @@ def upsert_companies(df: pd.DataFrame, geo_data: dict[str, dict]) -> int:
     if not rows:
         return 0
 
+    # Batch to stay under PostgreSQL's 65535 parameter limit (11 cols × ~5900 rows)
+    BATCH_SIZE = 2000
+    total = 0
     with engine.begin() as conn:
-        stmt = insert(Company).values(rows)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["company_number"],
-            set_={
-                "company_name": stmt.excluded.company_name,
-                "status": stmt.excluded.status,
-                "sic_codes": stmt.excluded.sic_codes,
-                "postcode": stmt.excluded.postcode,
-                "registered_address": stmt.excluded.registered_address,
-                "lat": stmt.excluded.lat,
-                "lng": stmt.excluded.lng,
-                "geocode_quality": stmt.excluded.geocode_quality,
-                "last_accounts_date": stmt.excluded.last_accounts_date,
-                "next_accounts_due": stmt.excluded.next_accounts_due,
-                "updated_at": text("now()"),
-            },
-        )
-        conn.execute(stmt)
+        for start in range(0, len(rows), BATCH_SIZE):
+            batch = rows[start : start + BATCH_SIZE]
+            stmt = insert(Company).values(batch)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["company_number"],
+                set_={
+                    "company_name": stmt.excluded.company_name,
+                    "status": stmt.excluded.status,
+                    "sic_codes": stmt.excluded.sic_codes,
+                    "postcode": stmt.excluded.postcode,
+                    "registered_address": stmt.excluded.registered_address,
+                    "lat": stmt.excluded.lat,
+                    "lng": stmt.excluded.lng,
+                    "geocode_quality": stmt.excluded.geocode_quality,
+                    "last_accounts_date": stmt.excluded.last_accounts_date,
+                    "next_accounts_due": stmt.excluded.next_accounts_due,
+                    "updated_at": text("now()"),
+                },
+            )
+            conn.execute(stmt)
+            total += len(batch)
 
         # Update PostGIS geometry column from lat/lng (only if PostGIS is available)
         try:
@@ -113,8 +119,8 @@ def upsert_companies(df: pd.DataFrame, geo_data: dict[str, dict]) -> int:
         except Exception:
             pass  # PostGIS not available on this database
 
-    logger.info("Upserted %d companies", len(rows))
-    return len(rows)
+    logger.info("Upserted %d companies", total)
+    return total
 
 
 def upsert_accounts(parsed: list[ParsedAccounts]) -> int:

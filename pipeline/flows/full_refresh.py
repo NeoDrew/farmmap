@@ -80,7 +80,7 @@ async def fetch_and_parse_batch(
     api_key = os.getenv("CH_API_KEY", "")
     auth = httpx.BasicAuth(username=api_key, password="") if api_key else None
 
-    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=60, follow_redirects=True, auth=auth) as client:
         tasks = [
             _fetch_one(client, cn, semaphore, manifest_conn)
             for cn in company_numbers
@@ -168,6 +168,14 @@ async def run_full_refresh(
     manifest_conn = _get_manifest_conn()
     semaphore = asyncio.Semaphore(FETCH_CONCURRENCY)
 
+    api_key = os.getenv("CH_API_KEY", "")
+    if not api_key:
+        logger.warning("CH_API_KEY not set — skipping accounts fetching step")
+        manifest_conn.close()
+        duration = (datetime.utcnow() - start).total_seconds()
+        logger.info("Partial refresh complete in %.0fs (no accounts). Stats: %s", duration, stats)
+        return stats
+
     all_parsed: list[ParsedAccounts] = []
     batch_size = 100
 
@@ -205,6 +213,7 @@ async def run_full_refresh(
 
 if __name__ == "__main__":
     import sys
-    max_co = int(sys.argv[1]) if len(sys.argv) > 1 else None
     skip_dl = "--skip-download" in sys.argv
+    numeric_args = [a for a in sys.argv[1:] if a.isdigit()]
+    max_co = int(numeric_args[0]) if numeric_args else None
     asyncio.run(run_full_refresh(skip_download=skip_dl, max_companies=max_co))
