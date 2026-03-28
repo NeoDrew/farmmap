@@ -5,12 +5,20 @@ from typing import AsyncGenerator
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://farmmap:farmmap@localhost:5433/farmmap",
+def _make_async_url(url: str) -> str:
+    """Convert plain postgresql:// URLs (from Render) to postgresql+asyncpg://."""
+    if url.startswith("postgresql://") or url.startswith("postgres://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1).replace(
+            "postgres://", "postgresql+asyncpg://", 1
+        )
+    return url
+
+
+DATABASE_URL = _make_async_url(
+    os.getenv("DATABASE_URL", "postgresql+asyncpg://farmmap:farmmap@localhost:5433/farmmap")
 )
 
-engine = create_async_engine(DATABASE_URL, pool_pre_ping=True, pool_size=10, max_overflow=20)
+engine = create_async_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
