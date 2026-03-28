@@ -79,13 +79,7 @@ async def pipeline_status(
     """Return pipeline run status and database coverage stats."""
     sql = text(
         """
-        WITH last_run AS (
-            SELECT started_at, status
-            FROM pipeline_runs
-            ORDER BY started_at DESC
-            LIMIT 1
-        ),
-        coverage AS (
+        WITH coverage AS (
             SELECT
                 COUNT(DISTINCT c.company_number) AS total_companies,
                 COUNT(DISTINCT a.company_number) AS companies_with_accounts,
@@ -96,15 +90,14 @@ async def pipeline_status(
             LEFT JOIN accounts a ON a.company_number = c.company_number
         )
         SELECT
-            lr.started_at AS last_run_at,
-            lr.status AS last_run_status,
+            (SELECT started_at FROM pipeline_runs ORDER BY started_at DESC LIMIT 1) AS last_run_at,
+            (SELECT status FROM pipeline_runs ORDER BY started_at DESC LIMIT 1) AS last_run_status,
             cov.total_companies,
             cov.companies_with_accounts,
             cov.parse_ok,
             cov.parse_partial,
             cov.parse_failed
         FROM coverage cov
-        CROSS JOIN last_run lr
         """
     )
     result = await db.execute(sql)
