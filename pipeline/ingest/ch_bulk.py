@@ -154,8 +154,15 @@ def _filter_csv_zip(zip_path: Path) -> pd.DataFrame:
                 # Filter active companies only
                 if "CompanyStatus" in chunk.columns:
                     chunk = chunk[chunk["CompanyStatus"].str.strip().str.lower() == "active"]
-                # Filter farm SIC codes
-                farm_mask = chunk.apply(_is_farm_company, axis=1)
+                # Filter farm SIC codes (vectorized — much faster than row apply)
+                sic_cols = [c for c in [
+                    "SICCode.SicText_1", "SICCode.SicText_2",
+                    "SICCode.SicText_3", "SICCode.SicText_4",
+                ] if c in chunk.columns]
+                farm_mask = pd.Series(False, index=chunk.index)
+                for col in sic_cols:
+                    extracted = chunk[col].str.strip().str[:5]
+                    farm_mask |= extracted.isin(FARM_SIC_CODES)
                 farm_rows.append(chunk[farm_mask])
     if not farm_rows:
         return pd.DataFrame()

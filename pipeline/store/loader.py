@@ -1,6 +1,7 @@
 """Upsert companies and accounts into PostgreSQL."""
 import logging
 import os
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -57,8 +58,8 @@ def upsert_companies(df: pd.DataFrame, geo_data: dict[str, dict]) -> int:
             "postcode": postcode,
         }
 
-        last_accounts = _clean(row.get("Accounts.LastMadeUpDate"))
-        next_accounts = _clean(row.get("Accounts.NextDueDate"))
+        last_accounts = _parse_date(row.get("Accounts.LastMadeUpDate"))
+        next_accounts = _parse_date(row.get("Accounts.NextDueDate"))
 
         record: dict[str, Any] = {
             "company_number": company_num,
@@ -141,3 +142,21 @@ def _clean(val: Any) -> Any:
     if s.lower() in ("nan", "none", ""):
         return None
     return s
+
+
+def _parse_date(val: Any) -> date | None:
+    """Parse CH date strings (DD/MM/YYYY or YYYY-MM-DD) into date objects."""
+    s = _clean(val)
+    if s is None:
+        return None
+    # CH bulk CSV uses DD/MM/YYYY
+    if "/" in s:
+        try:
+            return date(int(s[6:10]), int(s[3:5]), int(s[0:2]))
+        except (ValueError, IndexError):
+            return None
+    # ISO format
+    try:
+        return date.fromisoformat(s[:10])
+    except (ValueError, IndexError):
+        return None
