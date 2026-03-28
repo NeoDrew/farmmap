@@ -129,27 +129,22 @@ async def fetch_accounts_for_company(
         meta_resp.raise_for_status()
         meta = meta_resp.json()
 
-        # Find the best resource to download
+        # Determine best content type available
         resources = meta.get("resources", {})
-        download_url = None
         content_type = "application/pdf"
-        for res_type, res_info in resources.items():
+        for res_type in resources:
             if "xhtml" in res_type or "xml" in res_type:
-                download_url = res_info.get("href") or res_info
                 content_type = res_type
                 break
-            if "pdf" in res_type and not download_url:
-                download_url = res_info.get("href") or res_info
+            if "pdf" in res_type and content_type == "application/pdf":
                 content_type = res_type
-            if "html" in res_type and not download_url:
-                download_url = res_info.get("href") or res_info
+            elif "html" in res_type and content_type == "application/pdf":
                 content_type = res_type
 
+        # CH Document API: download via {doc_meta_url}/content with Accept header
+        download_url = doc_meta_url.rstrip("/") + "/content"
         if not download_url:
-            # Try direct links
-            download_url = links.get("self", "")
-            if not download_url:
-                return None
+            return None
 
         # Download the document
         ext = ".xhtml" if "xhtml" in content_type else (".pdf" if "pdf" in content_type else ".html")
@@ -157,7 +152,9 @@ async def fetch_accounts_for_company(
         company_dir.mkdir(parents=True, exist_ok=True)
         file_path = str(company_dir / f"{filing_date}{ext}")
 
-        doc_resp = await client.get(download_url, auth=auth)
+        doc_resp = await client.get(
+            download_url, auth=auth, headers={"Accept": content_type}
+        )
         doc_resp.raise_for_status()
         with open(file_path, "wb") as f:
             f.write(doc_resp.content)
