@@ -36,7 +36,6 @@ class ParsedAccounts:
             "net_assets": float(self.net_assets) if self.net_assets is not None else None,
             "total_liabilities": float(self.total_liabilities) if self.total_liabilities is not None else None,
             "employees": self.employees,
-            "currency": self.currency,
             "raw_filing_url": self.raw_filing_url,
         }
 
