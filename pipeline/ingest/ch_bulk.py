@@ -10,7 +10,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-CH_BULK_BASE = "http://download.companieshouse.gov.uk"
+CH_BULK_BASE = "https://download.companieshouse.gov.uk"
 OUTPUT_FILE = Path("data/parquet/companies_farm.parquet")
 RAW_DIR = Path("data/raw")
 
@@ -188,14 +188,34 @@ async def _discover_bulk_urls() -> list[str]:
     except Exception as exc:
         logger.warning("Failed to discover bulk URLs from CH website: %s", exc)
 
-    # Fallback: the file is typically named with current date in format YYYY-MM-DD
-    # Try up to 3 part files as CH sometimes splits
+    # Fallback: CH bulk data is published monthly, typically named with the 1st of the month.
+    # Try the current month, then the previous month.
     from datetime import date
+    from dateutil.relativedelta import relativedelta
     today = date.today()
-    date_str = today.strftime("%Y-%m-%d")
-    base = f"{CH_BULK_BASE}/BasicCompanyDataAsOneFile-{date_str}.zip"
-    logger.info("Falling back to single-file URL: %s", base)
-    return [base]
+    candidates = []
+    for months_back in range(0, 3):
+        d = today - relativedelta(months=months_back)
+        # CH uses first day of month
+        for day in [1]:
+            date_str = d.replace(day=day).strftime("%Y-%m-%d")
+            candidates.append(f"{CH_BULK_BASE}/BasicCompanyDataAsOneFile-{date_str}.zip")
+        # Also try part files (CH splits into parts when large)
+        for part in range(1, 7):
+            date_str = d.replace(day=1).strftime("%Y-%m-%d")
+            candidates.append(f"{CH_BULK_BASE}/BasicCompanyData-{date_str}-part{part}_{part}.zip")
+    # Verify which URL actually exists
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        for url in candidates:
+            try:
+                resp = await client.head(url)
+                if resp.status_code == 200:
+                    logger.info("Found bulk data at: %s", url)
+                    return [url]
+            except Exception:
+                continue
+    logger.warning("Could not find bulk data URL, trying first candidate: %s", candidates[0])
+    return [candidates[0]]
 
 
 def load_parquet() -> pd.DataFrame:
