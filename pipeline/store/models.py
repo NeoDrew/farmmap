@@ -7,6 +7,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Float,
+    ForeignKey,
     Integer,
     Numeric,
     String,
@@ -49,7 +50,7 @@ class Account(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     company_number: Mapped[str] = mapped_column(
-        String(8), nullable=False, index=True
+        String(8), ForeignKey("companies.company_number"), nullable=False, index=True
     )
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
     parse_source: Mapped[Optional[str]] = mapped_column(String(10))
