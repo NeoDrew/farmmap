@@ -2,12 +2,11 @@
 import os
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.deps import get_redis
 from api.routers import companies, map_data, stats
 
 app = FastAPI(
@@ -32,15 +31,6 @@ app.include_router(stats.router)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
-
-@app.delete("/api/admin/cache")
-async def flush_cache(redis=Depends(get_redis)):
-    """Flush all cached keys (choropleth, stats, etc.)."""
-    keys = await redis.keys("*")
-    if keys:
-        await redis.delete(*keys)
-    return {"deleted": len(keys)}
 
 
 # Serve React frontend static files if the dist directory exists
