@@ -46,6 +46,7 @@ services:
     name: farmmap-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
 
 databases:
   # PostgreSQL — note: Render's managed Postgres does NOT have PostGIS by default.
